@@ -14,7 +14,7 @@ import (
 )
 
 // HTTPClient embeds an http.Client
-// The HTTPClients adds some conveinince methods to set various aspects of
+// The HTTPClients adds some convenience methods to set various aspects of
 // an http.Client like Root CA's, Proxy or Client certificates
 type HTTPClient struct {
 	http.Client
