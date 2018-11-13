@@ -19,10 +19,10 @@ import (
 func TestNew(t *testing.T) {
 	c, err := New()
 	if err != nil {
-		t.Fatalf("expected new to return an httpclient; got error %v", err)
+		t.Fatalf("expected new to return an http.client; got error %v", err)
 	}
 
-	_, err = c.transport()
+	_, err = transport(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,9 +32,9 @@ func TestTransport(t *testing.T) {
 	cert, key, cleanup := CertAndKey(t)
 	defer cleanup()
 
-	c := &HTTPClient{}
+	c := &http.Client{}
 
-	_, err := c.transport()
+	_, err := transport(c)
 	if err == nil {
 		t.Fatal("expected an error message; Got nil")
 	}
@@ -42,7 +42,7 @@ func TestTransport(t *testing.T) {
 		t.Fatalf("got unexpected error message: %v", err)
 	}
 
-	err = c.Insecure()
+	err = SetInsecure(c)
 	if err == nil {
 		t.Fatal("expected an error message; Got nil")
 	}
@@ -50,7 +50,7 @@ func TestTransport(t *testing.T) {
 		t.Fatalf("got unexpected error message: %v", err)
 	}
 
-	err = c.Proxy("proxy")
+	err = WithProxy(c, "proxy")
 	if err == nil {
 		t.Fatal("expected an error message; Got nil")
 	}
@@ -58,7 +58,7 @@ func TestTransport(t *testing.T) {
 		t.Fatalf("got unexpected error message: %v", err)
 	}
 
-	err = c.RootCA(cert)
+	err = WithRootCA(c, cert)
 	if err == nil {
 		t.Fatal("expected an error message; Got nil")
 	}
@@ -66,7 +66,7 @@ func TestTransport(t *testing.T) {
 		t.Fatalf("got unexpected error message: %v", err)
 	}
 
-	err = c.ClientCert(cert, key)
+	err = WithClientCert(c, cert, key)
 	if err == nil {
 		t.Fatal("expected an error message; Got nil")
 	}
@@ -74,19 +74,6 @@ func TestTransport(t *testing.T) {
 		t.Fatalf("got unexpected error message: %v", err)
 	}
 
-}
-
-func TestGetClient(t *testing.T) {
-	c, err := New()
-	if err != nil {
-		t.Fatalf("expected new to return an httpclient; got error %v", err)
-	}
-	var cl interface{}
-	cl = c.GetClient()
-	client, ok := cl.(http.Client)
-	if !ok {
-		t.Fatalf("expected GetClient() to return an http.Client; got %T", client)
-	}
 }
 
 func TestInsecureOption(t *testing.T) {
@@ -94,7 +81,7 @@ func TestInsecureOption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected new to return an httpclient; got error %v", err)
 	}
-	transport, err := c.transport()
+	transport, err := transport(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +110,7 @@ func TestProxyOption(t *testing.T) {
 			}
 
 			if test.ShouldFail == false {
-				transport, err := c.transport()
+				transport, err := transport(c)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -154,7 +141,7 @@ func TestRootCAOption(t *testing.T) {
 			t.Fatalf("expected new to return an httpclient; got error %v", err)
 		}
 
-		transport, err := c.transport()
+		transport, err := transport(c)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -177,12 +164,11 @@ func TestRootCAOption(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected new to return an httpclient; got error %v", err)
 		}
-		err = c.RootCA(cert2)
-
+		err = WithRootCA(c, cert2)
 		if err != nil {
 			t.Fatalf("error adding second root CA cert: %v", err)
 		}
-		transport, err := c.transport()
+		transport, err := transport(c)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -235,7 +221,7 @@ func TestClientCertsOption(t *testing.T) {
 		t.Fatalf("expected new to return an httpclient; got error %v", err)
 	}
 
-	transport, err := c.transport()
+	transport, err := transport(c)
 	if err != nil {
 		t.Fatal(err)
 	}

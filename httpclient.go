@@ -13,15 +13,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-// HTTPClient embeds an http.Client
-// The HTTPClients adds some convenience methods to set various aspects of
-// an http.Client like Root CA's, Proxy or Client certificates
-type HTTPClient struct {
-	http.Client
-}
+type Option func(*http.Client) error
 
 // New returns a HTTPClient with some sensible defaults
-func New(opts ...func(*HTTPClient) error) (*HTTPClient, error) {
+func New(opts ...Option) (*http.Client, error) {
 	dialer := net.Dialer{
 		Timeout: 30 * time.Second,
 	}
@@ -38,10 +33,9 @@ func New(opts ...func(*HTTPClient) error) (*HTTPClient, error) {
 		ResponseHeaderTimeout: 120 * time.Second,
 	}
 
-	c := http.Client{
+	client := &http.Client{
 		Transport: transport,
 	}
-	client := &HTTPClient{c}
 
 	for _, opt := range opts {
 		err := opt(client)
@@ -53,69 +47,43 @@ func New(opts ...func(*HTTPClient) error) (*HTTPClient, error) {
 	return client, nil
 }
 
-// Insecure set the InsecureSkipVerify option to true in the client
+// Insecure set the InsecureSkipVerify Option to true in the client
 // this diabled verification of any server certificates
-// This is an option and should be passed to the New() function
-func Insecure() func(*HTTPClient) error {
-	return func(h *HTTPClient) error {
-		return h.Insecure()
+// This is an Option and should be passed to the New() function
+func Insecure() Option {
+	return func(c *http.Client) error {
+		return SetInsecure(c)
 	}
 }
 
-// ClientCert adds an client key and certificate to the client
-// This is an option and should be passed to the New() function
-func ClientCert(clientCert, clientKey string) func(*HTTPClient) error {
-	return func(h *HTTPClient) error {
-		return h.ClientCert(clientCert, clientKey)
-	}
-}
-
-// RootCA Adds a root certificate to the client
-// This certificate is used to verify certificates provided by the server
-// This is an option and should be passed to the New() function
-func RootCA(CACertFile string) func(*HTTPClient) error {
-	return func(h *HTTPClient) error {
-		return h.RootCA(CACertFile)
-	}
-}
-
-// Proxy sets a proxy for the client
-// This is an option and should be passed to the New() function
-func Proxy(proxyURL string) func(*HTTPClient) error {
-	return func(h *HTTPClient) error {
-		return h.Proxy(proxyURL)
-	}
-}
-
-func (h *HTTPClient) transport() (*http.Transport, error) {
-	t, ok := h.Transport.(*http.Transport)
-	if !ok {
-		return nil, errors.New("could not get transport from client")
-	}
-	return t, nil
-}
-
-// Insecure set the InsecureSkipVerify option to true in the client
+// SetInsecure set the InsecureSkipVerify Option to true in the client
 // this diabled verification of any server certificates
-func (h *HTTPClient) Insecure() error {
-	t, err := h.transport()
+func SetInsecure(c *http.Client) error {
+	t, err := transport(c)
 	if err != nil {
 		return err
 	}
-
 	t.TLSClientConfig.InsecureSkipVerify = true
-	h.Transport = t
+	c.Transport = t
 	return nil
 }
 
 // ClientCert adds an client key and certificate to the client
-func (h *HTTPClient) ClientCert(clientCert, clientKey string) error {
+// This is an Option and should be passed to the New() function
+func ClientCert(clientCert, clientKey string) Option {
+	return func(c *http.Client) error {
+		return WithClientCert(c, clientCert, clientKey)
+	}
+}
+
+// ClientCert adds an client key and certificate to the client
+func WithClientCert(c *http.Client, clientCert, clientKey string) error {
 	cert, err := tls.LoadX509KeyPair(clientCert, clientKey)
 	if err != nil {
 		return fmt.Errorf("could not load client certificate or key: %v", err)
 	}
 
-	t, err := h.transport()
+	t, err := transport(c)
 	if err != nil {
 		return err
 	}
@@ -127,20 +95,29 @@ func (h *HTTPClient) ClientCert(clientCert, clientKey string) error {
 	certs = append(certs, cert)
 
 	t.TLSClientConfig.Certificates = certs
-	h.Transport = t
+	c.Transport = t
 
 	return nil
 }
 
 // RootCA Adds a root certificate to the client
 // This certificate is used to verify certificates provided by the server
-func (h *HTTPClient) RootCA(CACertFile string) error {
+// This is an Option and should be passed to the New() function
+func RootCA(CACertFile string) Option {
+	return func(c *http.Client) error {
+		return WithRootCA(c, CACertFile)
+	}
+}
+
+// RootCA Adds a root certificate to the client
+// This certificate is used to verify certificates provided by the server
+func WithRootCA(c *http.Client, CACertFile string) error {
 	caBytes, err := ioutil.ReadFile(CACertFile)
 	if err != nil {
 		return fmt.Errorf("could not read CA certificate file: %v", err)
 	}
 
-	t, err := h.transport()
+	t, err := transport(c)
 	if err != nil {
 		return err
 	}
@@ -156,28 +133,38 @@ func (h *HTTPClient) RootCA(CACertFile string) error {
 	}
 	t.TLSClientConfig.RootCAs = p
 
-	h.Transport = t
+	c.Transport = t
 	return nil
 }
 
 // Proxy sets a proxy for the client
-func (h *HTTPClient) Proxy(proxyURL string) error {
+// This is an Option and should be passed to the New() function
+func Proxy(proxyURL string) Option {
+	return func(c *http.Client) error {
+		return WithProxy(c, proxyURL)
+	}
+}
+
+// Proxy sets a proxy for the client
+func WithProxy(c *http.Client, proxyURL string) error {
 	u, err := url.Parse(proxyURL)
 	if err != nil {
 		return fmt.Errorf("could not parse proxy url: %v", err)
 	}
-	t, err := h.transport()
+	t, err := transport(c)
 	if err != nil {
 		return err
 	}
 
 	t.Proxy = http.ProxyURL(u)
-	h.Transport = t
+	c.Transport = t
 	return nil
 }
 
-// GetClient returns the embedded http.Client
-// This can be used to pass a configured client to a function requiring an http.Client
-func (h *HTTPClient) GetClient() http.Client {
-	return h.Client
+func transport(c *http.Client) (*http.Transport, error) {
+	t, ok := c.Transport.(*http.Transport)
+	if !ok {
+		return nil, errors.New("could not get transport from client")
+	}
+	return t, nil
 }
