@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 type Option func(*http.Client) error
@@ -129,7 +127,7 @@ func WithRootCA(c *http.Client, CACertFile string) error {
 
 	ok := p.AppendCertsFromPEM(caBytes)
 	if !ok {
-		return errors.New("could not add ca cert to certpool")
+		return fmt.Errorf("could not add ca cert %s to certpool", CACertFile)
 	}
 	t.TLSClientConfig.RootCAs = p
 
@@ -164,7 +162,7 @@ func WithProxy(c *http.Client, proxyURL string) error {
 func transport(c *http.Client) (*http.Transport, error) {
 	t, ok := c.Transport.(*http.Transport)
 	if !ok {
-		return nil, errors.New("could not get transport from client")
+		return nil, fmt.Errorf("could not get transport from client")
 	}
 	return t, nil
 }
